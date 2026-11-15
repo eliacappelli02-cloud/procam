@@ -39,6 +39,10 @@ const TOP_BAR = 44;
 
 const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 const zoomLabel = (z: number) => String(z).replace(".", ",");
+const MAX_ZOOM = 15;
+const ZOOM_PRESETS = [0.5, 1, 2, 3];
+/** Valore dello zoom con una cifra decimale, in italiano (es. 2,4). */
+const fmtZoom = (z: number) => String(Math.round(z * 10) / 10).replace(".", ",");
 
 export function ActionCam() {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -82,6 +86,7 @@ export function ActionCam() {
   const [ultraId, setUltraId] = useState<string | null>(null);
   const [useUltra, setUseUltra] = useState(false);
   const [flipTurns, setFlipTurns] = useState(0);
+  const [pinching, setPinching] = useState(false);
   const [focus, setFocus] = useState<{ x: number; y: number; id: number } | null>(null);
   const ultraIdRef = useRef<string | null>(null);
 
@@ -204,7 +209,11 @@ export function ActionCam() {
   };
 
   const lensScale = lens === "linear" ? 1.15 : 1;
-  const digitalZoom = hwZoom || useUltra ? 1 : zoom;
+  // Zoom hardware fin dove arriva la camera, il resto (fino a 15×) è digitale.
+  const hwApplied = hwZoom ? Math.min(hwZoom.max, Math.max(hwZoom.min, zoom)) : 1;
+  const digitalZoom = useUltra ? 1 : hwZoom ? Math.max(1, zoom / hwApplied) : zoom;
+  const minZoom = hwZoom && hwZoom.min <= 0.5 ? 0.5 : 1;
+  const clampZoom = (z: number) => Math.min(MAX_ZOOM, Math.max(minZoom, z));
 
   /** Scatta ciò che si vede nel mirino (stesso ritaglio e stesso zoom dell'anteprima). */
   const snap = (): Promise<Blob | null> => {
@@ -395,6 +404,71 @@ export function ActionCam() {
     else if (Math.abs(ux) < 10 && Math.abs(uy) < 10) onTap?.(e);
   };
 
+  // Pizzico con due dita sul mirino = zoom continuo.
+  const pointersRef = useRef(new Map<number, { x: number; y: number }>());
+  const pinchRef = useRef<{ dist: number; zoom: number } | null>(null);
+  const leaveUltra = () => { if (useUltra) { setUseUltra(false); return true; } return false; };
+  const pinchDist = () => {
+    const [a, b] = [...pointersRef.current.values()];
+    return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0;
+  };
+  const vfDown = (e: React.PointerEvent) => {
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointersRef.current.size === 2) {
+      if (useUltra && recording) return;
+      const wasUltra = leaveUltra();
+      pinchRef.current = { dist: pinchDist() || 1, zoom: wasUltra ? 1 : zoom };
+      gestureRef.current = null;
+      setPinching(true);
+    } else if (pointersRef.current.size === 1) onGestureDown(e);
+  };
+  const vfMove = (e: React.PointerEvent) => {
+    if (!pointersRef.current.has(e.pointerId)) return;
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const p = pinchRef.current;
+    if (p && pointersRef.current.size >= 2) setZoom(clampZoom(p.zoom * (pinchDist() / p.dist)));
+  };
+  const vfUp = (e: React.PointerEvent) => {
+    pointersRef.current.delete(e.pointerId);
+    if (pinchRef.current) {
+      if (pointersRef.current.size < 2) { pinchRef.current = null; setPinching(false); }
+      gestureRef.current = null;
+      return;
+    }
+    onGestureUp(e, tapViewfinder);
+  };
+  const vfCancel = (e: React.PointerEvent) => {
+    pointersRef.current.delete(e.pointerId);
+    gestureRef.current = null;
+    if (pointersRef.current.size < 2) { pinchRef.current = null; setPinching(false); }
+  };
+
+  // Trascinando sulla barra dei pulsanti si fa zoom in modo continuo (verso sinistra = avvicina).
+  const zoomDragRef = useRef<{ x: number; y: number; z: number; moved: boolean } | null>(null);
+  const suppressClickRef = useRef(false);
+  const pillsDown = (e: React.PointerEvent) => { zoomDragRef.current = { x: e.clientX, y: e.clientY, z: zoom, moved: false }; };
+  const pillsMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const d = zoomDragRef.current;
+    if (!d) return;
+    const th = (orient.angle * Math.PI) / 180;
+    const dx = e.clientX - d.x, dy = e.clientY - d.y;
+    const ux = dx * Math.cos(th) - dy * Math.sin(th);
+    if (!d.moved) {
+      if (Math.abs(ux) < 8) return;
+      if (useUltra && recording) return;
+      d.moved = true;
+      if (leaveUltra()) d.z = 1;
+      e.currentTarget.setPointerCapture(e.pointerId);
+      setPinching(true);
+    }
+    setZoom(clampZoom(d.z * Math.pow(2, -ux / 70)));
+  };
+  const pillsUp = () => {
+    const moved = zoomDragRef.current?.moved;
+    zoomDragRef.current = null;
+    if (moved) { setPinching(false); suppressClickRef.current = true; setTimeout(() => { suppressClickRef.current = false; }, 0); }
+  };
+
   const tapViewfinder = (e: React.PointerEvent) => {
     setOptionsOpen(false); setSub(null);
     setFocus({ x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY, id: Date.now() });
@@ -447,7 +521,7 @@ export function ActionCam() {
           <video
             ref={videoRef}
             autoPlay playsInline muted
-            className="pointer-events-none h-full w-full object-cover transition-transform duration-200"
+            className={`pointer-events-none h-full w-full object-cover ${pinching ? "" : "transition-transform duration-200"}`}
             style={{ transform: `scale(${digitalZoom * lensScale}) ${facing === "user" ? "scaleX(-1)" : ""}` }}
           />
           {grid && (
@@ -471,9 +545,10 @@ export function ActionCam() {
           <div
             className="absolute inset-0"
             style={{ touchAction: "none" }}
-            onPointerDown={onGestureDown}
-            onPointerUp={(e) => onGestureUp(e, tapViewfinder)}
-            onPointerCancel={() => { gestureRef.current = null; }}
+            onPointerDown={vfDown}
+            onPointerMove={vfMove}
+            onPointerUp={vfUp}
+            onPointerCancel={vfCancel}
           />
           {focus && (
             <div
@@ -532,16 +607,23 @@ export function ActionCam() {
             </div>
           ) : (
             <div className="absolute inset-x-0 flex justify-center" style={{ bottom: `calc(var(--sa-bottom) + ${CONTROLS_H + 10}px)` }}>
-              <div className="glass flex items-center gap-1 rounded-full p-[3px]">
-                {[0.5, 1, 2, 3].map((z) => {
-                  const on = zoom === z;
+              <div
+                className="glass flex touch-none items-center gap-1 rounded-full p-[3px]"
+                onPointerDown={pillsDown}
+                onPointerMove={pillsMove}
+                onPointerUp={pillsUp}
+                onPointerCancel={pillsUp}
+              >
+                {ZOOM_PRESETS.map((z) => {
+                  const active = [...ZOOM_PRESETS].reverse().find((q) => zoom >= q - 0.001) ?? 0.5;
+                  const on = z === active;
                   return (
                     <button
                       key={z}
-                      onClick={() => pickZoom(z)}
-                      className={`rot cam-btn tnum text-[13px] font-semibold ${on ? "h-[38px] w-[38px] bg-black/55 text-ios-yellow" : "h-[30px] w-[30px] text-white"}`}
+                      onClick={() => { if (!suppressClickRef.current) pickZoom(z); }}
+                      className={`rot cam-btn tnum text-[13px] font-semibold ${on ? "h-[38px] min-w-[38px] bg-black/55 px-1.5 text-ios-yellow" : "h-[30px] w-[30px] text-white"}`}
                     >
-                      {zoomLabel(z)}{on ? "×" : ""}
+                      {on ? `${fmtZoom(zoom)}×` : zoomLabel(z)}
                     </button>
                   );
                 })}
@@ -645,9 +727,9 @@ export function ActionCam() {
               {clips[0] && (clips[0].kind === "photo" ? <img src={clips[0].url} className="h-full w-full object-cover" alt="" /> : <video src={clips[0].url} muted playsInline className="h-full w-full object-cover" />)}
             </button>
 
-            <button onClick={shutter} aria-label="Scatta" className="group flex h-[76px] w-[76px] items-center justify-center rounded-full border-[4px] border-white">
+            <button onClick={shutter} aria-label="Scatta" className="group flex h-[76px] w-[76px] items-center justify-center rounded-full border-[4px] border-white outline-none [-webkit-tap-highlight-color:transparent]">
               <span
-                className={`block bg-white transition-all duration-200 ease-out group-active:scale-[0.86] ${isVideoMode ? "!bg-ios-red" : ""} ${recording ? "h-[30px] w-[30px] rounded-[8px]" : "h-[60px] w-[60px] rounded-full"}`}
+                className={`block transition-[width,height,border-radius,background-color,scale] duration-200 ease-out group-active:scale-[0.86] ${isVideoMode ? "bg-ios-red" : "bg-white"} ${recording ? "h-[30px] w-[30px] rounded-[8px]" : "h-[60px] w-[60px] rounded-[30px]"}`}
               />
             </button>
 
