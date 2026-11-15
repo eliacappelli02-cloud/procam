@@ -1,0 +1,11 @@
+{
+  "name": "procam",
+  "main": ".output/server/index.mjs",
+  "compatibility_date": "2026-11-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "no_bundle": true,
+  "rules": [{ "type": "ESModule", "globs": ["**/*.mjs", "**/*.js"] }],
+  "assets": { "binding": "ASSETS", "directory": ".output/public" },
+  // Il build parte da solo prima di ogni deploy, anche se su Cloudflare il campo "Build command" è vuoto.
+  "build": { "command": "(bun install --frozen-lockfile || npm install --legacy-peer-deps) && npm run build" }
+}
