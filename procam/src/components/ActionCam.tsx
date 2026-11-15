@@ -727,9 +727,13 @@ export function ActionCam() {
               {clips[0] && (clips[0].kind === "photo" ? <img src={clips[0].url} className="h-full w-full object-cover" alt="" /> : <video src={clips[0].url} muted playsInline className="h-full w-full object-cover" />)}
             </button>
 
-            <button onClick={shutter} aria-label="Scatta" className="group flex h-[76px] w-[76px] items-center justify-center rounded-full border-[4px] border-white outline-none [-webkit-tap-highlight-color:transparent]">
+            <button onClick={shutter} aria-label="Scatta" className="group relative h-[76px] w-[76px] rounded-full border-[4px] border-white outline-none [-webkit-tap-highlight-color:transparent]">
+              {/* Cerchio (pronto a scattare) e quadrato (in registrazione) sono due elementi che si scambiano con scala + opacità: niente animazione degli angoli, quindi niente residui grafici su Safari. */}
               <span
-                className={`block transition-[width,height,border-radius,background-color,scale] duration-200 ease-out group-active:scale-[0.86] ${isVideoMode ? "bg-ios-red" : "bg-white"} ${recording ? "h-[30px] w-[30px] rounded-[8px]" : "h-[60px] w-[60px] rounded-[30px]"}`}
+                className={`absolute inset-0 m-auto block h-[60px] w-[60px] rounded-full transition-[scale,opacity] duration-200 ease-out group-active:scale-[0.86] ${isVideoMode ? "bg-ios-red" : "bg-white"} ${recording ? "scale-50 opacity-0" : "opacity-100"}`}
+              />
+              <span
+                className={`absolute inset-0 m-auto block h-[30px] w-[30px] rounded-[8px] bg-ios-red transition-[scale,opacity] duration-200 ease-out ${recording ? "opacity-100" : "scale-50 opacity-0"}`}
               />
             </button>
 
