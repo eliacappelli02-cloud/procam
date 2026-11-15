@@ -1,0 +1,216 @@
+/*
+ * Tailwind v4: la configurazione vive qui (niente tailwind.config.js).
+ * Stile ispirato all'app Fotocamera di iPhone: nero, vetro sfocato, giallo di sistema, font SF.
+ */
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ring-offset-background: var(--background);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-ios-yellow: var(--ios-yellow);
+  --color-ios-red: var(--ios-red);
+  --color-ios-blue: var(--ios-blue);
+  --color-ios-green: var(--ios-green);
+  --color-ios-sheet: var(--ios-sheet);
+  --color-ios-cell: var(--ios-cell);
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", system-ui,
+    "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+:root {
+  --radius: 0.75rem;
+
+  /* Colori di sistema iOS (dark) */
+  --ios-yellow: oklch(0.88 0.17 92); /* #FFD60A */
+  --ios-red: oklch(0.65 0.23 28); /* #FF3B30 */
+  --ios-blue: oklch(0.65 0.19 255); /* #0A84FF */
+  --ios-green: oklch(0.76 0.19 150); /* #30D158 */
+  --ios-sheet: oklch(0.2 0.004 286); /* #1C1C1E */
+  --ios-cell: oklch(0.27 0.005 286); /* #2C2C2E */
+
+  --background: oklch(0 0 0);
+  --foreground: oklch(1 0 0);
+  --card: var(--ios-sheet);
+  --card-foreground: oklch(1 0 0);
+  --popover: var(--ios-sheet);
+  --popover-foreground: oklch(1 0 0);
+  --primary: var(--ios-yellow);
+  --primary-foreground: oklch(0 0 0);
+  --secondary: var(--ios-cell);
+  --secondary-foreground: oklch(1 0 0);
+  --muted: var(--ios-cell);
+  --muted-foreground: oklch(0.7 0.01 286);
+  --accent: var(--ios-cell);
+  --accent-foreground: oklch(1 0 0);
+  --destructive: var(--ios-red);
+  --destructive-foreground: oklch(1 0 0);
+  --border: oklch(1 0 0 / 15%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: var(--ios-yellow);
+  --chart-1: var(--ios-yellow);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: var(--ios-sheet);
+  --sidebar-foreground: oklch(1 0 0);
+  --sidebar-primary: var(--ios-yellow);
+  --sidebar-primary-foreground: oklch(0 0 0);
+  --sidebar-accent: var(--ios-cell);
+  --sidebar-accent-foreground: oklch(1 0 0);
+  --sidebar-border: oklch(1 0 0 / 15%);
+  --sidebar-ring: var(--ios-yellow);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  html,
+  body {
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+    position: fixed;
+    inset: 0;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: #000;
+    color: #fff;
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+  }
+
+  button {
+    cursor: default;
+    font: inherit;
+  }
+}
+
+@layer components {
+  .cam-shell {
+    @apply fixed inset-0 overflow-hidden bg-black text-white select-none;
+    touch-action: manipulation;
+  }
+  /* Riquadro dell'interfaccia: serve come "container" per misurare il mirino in cqw/cqh. */
+  .cam-ui {
+    container-type: size;
+  }
+  /* Le icone ruotano quando il telefono viene girato, come nell'app Fotocamera. */
+  .rot {
+    transform: rotate(var(--icon-rot, 0deg));
+    transition: transform 0.25s ease;
+  }
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+  /* Vetro scuro sfocato (materiale "ultra thin dark" di iOS). */
+  .glass {
+    background: rgb(28 28 30 / 0.45);
+    -webkit-backdrop-filter: blur(20px) saturate(1.6);
+    backdrop-filter: blur(20px) saturate(1.6);
+  }
+  .glass-strong {
+    background: rgb(44 44 46 / 0.82);
+    -webkit-backdrop-filter: blur(24px) saturate(1.8);
+    backdrop-filter: blur(24px) saturate(1.8);
+  }
+  .cam-btn {
+    @apply flex items-center justify-center rounded-full text-white transition-colors disabled:opacity-40;
+  }
+  .sheet-in {
+    animation: sheet-in 0.34s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  .fade-in {
+    animation: fade-in 0.2s ease-out;
+  }
+  .focus-ring {
+    animation: focus-pop 1.6s ease-out forwards;
+  }
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes focus-pop {
+  0% {
+    transform: scale(1.4);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  30% {
+    transform: scale(1);
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet-in,
+  .fade-in,
+  .focus-ring {
+    animation-duration: 0.01ms;
+  }
+}

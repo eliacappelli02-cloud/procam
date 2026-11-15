@@ -1,0 +1,4 @@
+[install]
+saveTextLockfile = true
+# Protezione supply-chain: ignora versioni pubblicate da meno di 24 ore.
+minimumReleaseAge = 86400
