@@ -132,6 +132,13 @@
   button {
     cursor: default;
     font: inherit;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  button:focus,
+  button:focus-visible {
+    outline: none;
   }
 }
 
