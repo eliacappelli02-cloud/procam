@@ -32,8 +32,9 @@ type ResKey = keyof typeof RES;
 const RES_LABEL: Record<ResKey, string> = { "4K": "4K", "1080p": "HD", "720p": "720p" };
 const FPS_OPTIONS = [24, 30, 60, 120];
 
-/** Altezza (px) dell'area comandi sotto al mirino in modalità video; la barra in alto è 44px. */
-const BOTTOM_AREA = 150;
+/** Altezza (px) occupata dai comandi in basso (otturatore + selettore): zoom e opzioni stanno sopra. */
+const CONTROLS_H = 134;
+const SHUTTER_BOTTOM = 14;
 const TOP_BAR = 44;
 
 const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
@@ -420,11 +421,9 @@ export function ActionCam() {
     );
   }
 
-  // Geometria del mirino: 3:4 in foto (come iOS), a tutta altezza in video.
-  const vfTop = isVideoMode ? "0px" : `calc(var(--sa-top) + ${TOP_BAR}px)`;
-  const vfHeight = isVideoMode
-    ? `calc(100cqh - ${BOTTOM_AREA}px - var(--sa-bottom))`
-    : `min(133.333cqw, calc(100cqh - var(--sa-top) - ${TOP_BAR}px - ${BOTTOM_AREA + 30}px - var(--sa-bottom)))`;
+  // Il mirino occupa tutto lo schermo; i comandi stanno sopra l'immagine.
+  const vfTop = "0px";
+  const vfHeight = "100cqh";
   const levelOk = Math.abs(tilt) < 2;
 
   return (
@@ -433,7 +432,7 @@ export function ActionCam() {
         {/* Mirino */}
         <div
           ref={vfRef}
-          className="absolute inset-x-0 overflow-hidden rounded-[0px] bg-neutral-900 transition-[top,height] duration-300 ease-out"
+          className="absolute inset-x-0 overflow-hidden bg-neutral-900"
           style={{ top: vfTop, height: vfHeight }}
         >
           <video
@@ -483,7 +482,7 @@ export function ActionCam() {
 
           {/* Opzioni (chevron) o zoom, in fondo al mirino */}
           {optionsOpen ? (
-            <div className="fade-in absolute inset-x-0 bottom-3 flex justify-center px-3">
+            <div className="fade-in absolute inset-x-0 flex justify-center px-3" style={{ bottom: `calc(var(--sa-bottom) + ${CONTROLS_H + 10}px)` }}>
               {sub === null ? (
                 <div className="glass flex items-center gap-3 rounded-full px-3 py-2">
                   <OptBtn label="Timer" on={timer > 0} onClick={() => setSub("timer")}>
@@ -523,7 +522,7 @@ export function ActionCam() {
               )}
             </div>
           ) : (
-            <div className="absolute inset-x-0 bottom-3 flex justify-center">
+            <div className="absolute inset-x-0 flex justify-center" style={{ bottom: `calc(var(--sa-bottom) + ${CONTROLS_H + 10}px)` }}>
               <div className="glass flex items-center gap-1 rounded-full p-[3px]">
                 {[0.5, 1, 2, 3].map((z) => {
                   const on = zoom === z;
@@ -541,6 +540,9 @@ export function ActionCam() {
             </div>
           )}
         </div>
+
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-[120px] bg-gradient-to-b from-black/40 to-transparent" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[300px] bg-gradient-to-t from-black/55 to-transparent" />
 
         {error && (
           <div className="glass-strong fade-in absolute inset-x-4 z-30 rounded-2xl p-3 text-center text-[14px]" style={{ top: `calc(var(--sa-top) + ${TOP_BAR + 8}px)` }}>
@@ -608,7 +610,7 @@ export function ActionCam() {
           <div
             ref={pickerRef}
             className="pointer-events-auto absolute inset-x-0 overflow-hidden"
-            style={{ bottom: 22 + 76 + 16, height: 32, touchAction: "none" }}
+            style={{ bottom: SHUTTER_BOTTOM + 76 + 12, height: 32, touchAction: "none" }}
             onPointerDown={onGestureDown}
             onPointerUp={(e) => onGestureUp(e)}
             onPointerCancel={() => { gestureRef.current = null; }}
@@ -629,7 +631,7 @@ export function ActionCam() {
           </div>
 
           {/* Anteprima ultimo scatto · otturatore · cambia camera */}
-          <footer className="pointer-events-auto absolute inset-x-0 flex items-center justify-between px-8" style={{ bottom: 22, height: 76 }}>
+          <footer className="pointer-events-auto absolute inset-x-0 flex items-center justify-between px-8" style={{ bottom: SHUTTER_BOTTOM, height: 76 }}>
             <button onClick={() => setPanel("gallery")} aria-label="Libreria" className="rot h-[48px] w-[48px] overflow-hidden rounded-[10px] bg-ios-sheet">
               {clips[0] && (clips[0].kind === "photo" ? <img src={clips[0].url} className="h-full w-full object-cover" alt="" /> : <video src={clips[0].url} muted playsInline className="h-full w-full object-cover" />)}
             </button>
