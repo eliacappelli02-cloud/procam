@@ -16,7 +16,7 @@ import {
   Zap,
 } from "lucide-react";
 import { LoopRecorder, SimpleRecorder, pickMime, uid, type Clip } from "@/lib/recorder";
-import { doubleTic, tic, unlockFeedback } from "@/lib/feedback";
+import { TIC_MS, doubleTic, tic, tripleTic, unlockFeedback } from "@/lib/feedback";
 
 type Mode = "timelapse" | "loop" | "video" | "photo" | "burst";
 // Stesso ordine del selettore di iOS: i modi video a sinistra, quelli foto a destra.
@@ -47,6 +47,8 @@ export function ActionCam() {
   const recRef = useRef<SimpleRecorder | null>(null);
   const loopRef = useRef<LoopRecorder | null>(null);
   const tlRef = useRef<{ stop: () => void } | null>(null);
+  // true mentre parte la registrazione (il tic iniziale sta suonando): evita doppi avvii.
+  const startingRef = useRef(false);
 
   const [mode, setMode] = useState<Mode>("photo");
   const [facing, setFacing] = useState<"environment" | "user">("environment");
@@ -235,7 +237,7 @@ export function ActionCam() {
 
   const shutter = async () => {
     const s = streamRef.current;
-    if (!s) return;
+    if (!s || startingRef.current) return;
     unlockFeedback();
     if (recording && mode === "loop" && loopRef.current && !loopRef.current.locked) {
       loopRef.current.lock(); setLoopLocked(true); doFlash(); doubleTic(); return;
@@ -247,15 +249,19 @@ export function ActionCam() {
       for (let i = 0; i < 10; i++) { const b = await snap(); if (b) addClip(b, "photo", `Raffica ${i + 1}/10`); doFlash(); await new Promise((r) => setTimeout(r, 100)); }
       return;
     }
+    // 1 tic di partenza. Il tic suona PRIMA che parta la registrazione, così non finisce nel video.
+    startingRef.current = true;
+    tic();
+    await new Promise((r) => setTimeout(r, TIC_MS + 120));
+    startingRef.current = false;
     setElapsed(0);
     setRecording(true);
     setOptionsOpen(false); setSub(null);
-    if (mode === "video") { recRef.current = new SimpleRecorder(s, (b) => addClip(b, "video", `Video ${res} ${fps}fps`), bitrate); tic(); }
+    if (mode === "video") recRef.current = new SimpleRecorder(s, (b) => addClip(b, "video", `Video ${res} ${fps}fps`), bitrate);
     if (mode === "loop") {
       setLoopLocked(false);
       loopRef.current = new LoopRecorder(s, loopMin * 60, bitrate);
       loopRef.current.start();
-      tic();
     }
     if (mode === "timelapse") tlRef.current = startTimelapse();
   };
@@ -287,10 +293,13 @@ export function ActionCam() {
 
   const stopRec = async () => {
     setRecording(false);
+    // Prima si ferma la registrazione, poi suonano i 3 tic finali: così non finiscono nel video.
     recRef.current?.stop(); recRef.current = null;
     tlRef.current?.stop(); tlRef.current = null;
-    if (loopRef.current) {
-      const r = await loopRef.current.stop();
+    const loopStop = loopRef.current ? loopRef.current.stop() : null;
+    tripleTic();
+    if (loopStop) {
+      const r = await loopStop;
       loopRef.current = null;
       setLoopLocked(false);
       if (r) addClip(r.blob, "video", `Loop · dalle ${new Date(r.at).toLocaleTimeString()}`);
