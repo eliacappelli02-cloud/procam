@@ -498,7 +498,7 @@ export function ActionCam() {
 
   // Quadrante ad arco (∩): tieni premuto o trascina sui pulsanti dello zoom e segui la curva col dito,
   // anche scendendo ai lati. Verso sinistra = avvicina, verso destra = allontana.
-  type ZoomDrag = { cx: number; cy: number; z: number; ang0: number; active: boolean; target: HTMLElement; pointerId: number; timer: ReturnType<typeof setTimeout> | undefined; x0: number; y0: number };
+  type ZoomDrag = { cx: number; cy: number; z: number; ang0: number; active: boolean; target: HTMLElement; pointerId: number; timer: ReturnType<typeof setTimeout> | undefined; x0: number; y0: number; last: number; acc: number };
   const zoomDragRef = useRef<ZoomDrag | null>(null);
   const dialEndedAtRef = useRef(0);
   /** Posizione del dito rispetto al centro dei pulsanti, nelle coordinate dell'interfaccia (che può essere ruotata). */
@@ -520,9 +520,10 @@ export function ActionCam() {
   };
   const pillsDown = (e: React.PointerEvent<HTMLDivElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
-    const d: ZoomDrag = { cx: r.left + r.width / 2, cy: r.top + r.height / 2, z: zoom, ang0: 90, active: false, target: e.currentTarget, pointerId: e.pointerId, timer: undefined, x0: e.clientX, y0: e.clientY };
+    const d: ZoomDrag = { cx: r.left + r.width / 2, cy: r.top + r.height / 2, z: zoom, ang0: 90, active: false, target: e.currentTarget, pointerId: e.pointerId, timer: undefined, x0: e.clientX, y0: e.clientY, last: 90, acc: 0 };
     const o = dialOffset(d, e);
     d.ang0 = dialAngle(o.ux, o.uy);
+    d.last = d.ang0;
     d.timer = setTimeout(() => activateDial(d), 250);
     zoomDragRef.current = d;
   };
@@ -535,7 +536,16 @@ export function ActionCam() {
       if (!d.active) return;
     }
     const { ux, uy } = dialOffset(d, e);
-    const nz = clampZoom(Math.exp(Math.log(d.z) + (dialAngle(ux, uy) - d.ang0) / DIAL_INPUT_K));
+    // L'angolo "salta" da +180° a -180° quando il dito scende oltre l'orizzontale a sinistra: lo sommiamo a piccoli
+    // passi (senza salto) e lo limitiamo tra minimo e massimo zoom, così non si torna di colpo a 0,5×.
+    const a = dialAngle(ux, uy);
+    let diff = a - d.last;
+    if (diff > 180) diff -= 360; else if (diff < -180) diff += 360;
+    d.last = a;
+    const lo = DIAL_INPUT_K * (Math.log(minZoom) - Math.log(d.z));
+    const hi = DIAL_INPUT_K * (Math.log(MAX_ZOOM) - Math.log(d.z));
+    d.acc = Math.min(hi, Math.max(lo, d.acc + diff));
+    const nz = clampZoom(Math.exp(Math.log(d.z) + d.acc / DIAL_INPUT_K));
     setZoom(nz);
     zoomHaptic(nz);
   };
