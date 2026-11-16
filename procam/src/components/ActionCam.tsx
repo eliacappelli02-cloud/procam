@@ -41,8 +41,11 @@ const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).p
 const zoomLabel = (z: number) => String(z).replace(".", ",");
 const MAX_ZOOM = 15;
 /** Quadrante dello zoom ad arco: raggio in px e gradi di rotazione per ogni "e-fold" di zoom. */
-const DIAL_R = 210;
+const DIAL_R = 170;
 const DIAL_K = 40;
+/** L'arco viene disegnato sollevato di questi px sopra i pulsanti, così non copre il selettore dei modi. */
+const DIAL_SHIFT = 84;
+const DIAL_SPAN = 50;
 const DIAL_TICKS: { v: number; major?: boolean }[] = [
   { v: 0.5, major: true }, { v: 0.6 }, { v: 0.7 }, { v: 0.8 }, { v: 0.9 },
   { v: 1, major: true }, { v: 1.25 }, { v: 1.5 }, { v: 1.75 },
@@ -458,14 +461,14 @@ export function ActionCam() {
   // anche scendendo ai lati. Verso sinistra = avvicina, verso destra = allontana.
   type ZoomDrag = { cx: number; cy: number; z: number; ang0: number; active: boolean; target: HTMLElement; pointerId: number; timer: ReturnType<typeof setTimeout> | undefined; x0: number; y0: number };
   const zoomDragRef = useRef<ZoomDrag | null>(null);
-  const suppressClickRef = useRef(false);
+  const dialEndedAtRef = useRef(0);
   /** Posizione del dito rispetto al centro dei pulsanti, nelle coordinate dell'interfaccia (che può essere ruotata). */
   const dialOffset = (d: ZoomDrag, e: { clientX: number; clientY: number }) => {
     const th = (orient.angle * Math.PI) / 180;
     const sx = e.clientX - d.cx, sy = e.clientY - d.cy;
     return { ux: sx * Math.cos(th) - sy * Math.sin(th), uy: sx * Math.sin(th) + sy * Math.cos(th) };
   };
-  const dialAngle = (ux: number, uy: number) => (Math.atan2(DIAL_R - uy, ux) * 180) / Math.PI;
+  const dialAngle = (ux: number, uy: number) => (Math.atan2(DIAL_R - DIAL_SHIFT - uy, ux) * 180) / Math.PI;
   const activateDial = (d: ZoomDrag) => {
     if (d.active || (useUltra && recording)) return;
     d.active = true;
@@ -501,8 +504,7 @@ export function ActionCam() {
     if (d.active) {
       setDialOn(false);
       setPinching(false);
-      suppressClickRef.current = true;
-      setTimeout(() => { suppressClickRef.current = false; }, 0);
+      dialEndedAtRef.current = Date.now();
     }
   };
 
@@ -657,7 +659,7 @@ export function ActionCam() {
                   return (
                     <button
                       key={z}
-                      onClick={() => { if (!suppressClickRef.current) pickZoom(z); }}
+                      onClick={() => { if (Date.now() - dialEndedAtRef.current > 600) pickZoom(z); }}
                       className={`rot cam-btn tnum text-[13px] font-semibold ${on ? "h-[38px] min-w-[38px] bg-black/55 px-1.5 text-ios-yellow" : "h-[30px] w-[30px] text-white"}`}
                     >
                       {on ? `${fmtZoom(zoom)}×` : zoomLabel(z)}
@@ -941,42 +943,44 @@ function Switch({ on, onChange, disabled }: { on: boolean; onChange: (v: boolean
 /** Quadrante dello zoom ad arco (∩) con tacche e numeri, in stile iOS. L'origine è il centro dei pulsanti dello zoom. */
 function ZoomDial({ zoom, minZoom }: { zoom: number; minZoom: number }) {
   const R = DIAL_R;
+  const SPAN = DIAL_SPAN;
   const lnz = Math.log(zoom);
   const phi = (v: number) => 90 - DIAL_K * (Math.log(v) - lnz);
   const pt = (deg: number, r: number) => {
     const a = (deg * Math.PI) / 180;
     return { x: r * Math.cos(a), y: R - r * Math.sin(a) };
   };
-  const SPAN = 62;
   const band = (() => {
-    const o = R + 18, i = R - 78;
+    const o = R + 14, i = R - 58;
     const a = pt(90 + SPAN, o), b = pt(90 - SPAN, o), c = pt(90 - SPAN, i), d = pt(90 + SPAN, i);
     return `M ${a.x} ${a.y} A ${o} ${o} 0 0 1 ${b.x} ${b.y} L ${c.x} ${c.y} A ${i} ${i} 0 0 0 ${d.x} ${d.y} Z`;
   })();
   return (
     <svg className="fade-in pointer-events-none absolute left-1/2 top-1/2 overflow-visible" width="1" height="1" aria-hidden="true">
-      <path d={band} fill="rgba(28,28,30,0.55)" />
-      {DIAL_TICKS.filter((t) => t.v >= minZoom - 1e-6 && t.v <= MAX_ZOOM + 1e-6).map((t) => {
-        const f = phi(t.v);
-        const off = Math.abs(f - 90);
-        if (off > SPAN - 2) return null;
-        const p1 = pt(f, R + 2), p2 = pt(f, R - (t.major ? 18 : 10));
-        const lab = pt(f, R - 40);
-        const op = Math.max(0.15, 1 - off / 75);
-        return (
-          <g key={t.v} opacity={op}>
-            <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke="#fff" strokeWidth={t.major ? 2 : 1.4} strokeLinecap="round" />
-            {t.major && (
-              <text x={lab.x} y={lab.y} fill="#fff" fontSize="13" fontWeight="600" textAnchor="middle" dominantBaseline="middle" transform={`rotate(${90 - f} ${lab.x} ${lab.y})`}>
-                {String(t.v).replace(".", ",")}
-              </text>
-            )}
-          </g>
-        );
-      })}
-      {/* indicatore fisso al centro */}
-      <line x1="0" y1={-6} x2="0" y2={26} stroke="#FFD60A" strokeWidth="3" strokeLinecap="round" />
-      <text x="0" y={-26} fill="#FFD60A" fontSize="17" fontWeight="600" textAnchor="middle">{fmtZoom(zoom)}×</text>
+      <g transform={`translate(0 ${-DIAL_SHIFT})`}>
+        <path d={band} fill="rgba(28,28,30,0.55)" />
+        {DIAL_TICKS.filter((t) => t.v >= minZoom - 1e-6 && t.v <= MAX_ZOOM + 1e-6).map((t) => {
+          const f = phi(t.v);
+          const off = Math.abs(f - 90);
+          if (off > SPAN - 2) return null;
+          const p1 = pt(f, R + 2), p2 = pt(f, R - (t.major ? 16 : 9));
+          const lab = pt(f, R - 36);
+          const op = Math.max(0.15, 1 - off / 65);
+          return (
+            <g key={t.v} opacity={op}>
+              <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke="#fff" strokeWidth={t.major ? 2 : 1.4} strokeLinecap="round" />
+              {t.major && (
+                <text x={lab.x} y={lab.y} fill="#fff" fontSize="13" fontWeight="600" textAnchor="middle" dominantBaseline="middle" transform={`rotate(${90 - f} ${lab.x} ${lab.y})`}>
+                  {String(t.v).replace(".", ",")}
+                </text>
+              )}
+            </g>
+          );
+        })}
+        {/* indicatore fisso al centro e valore attuale */}
+        <line x1="0" y1={-6} x2="0" y2={24} stroke="#FFD60A" strokeWidth="3" strokeLinecap="round" />
+        <text x="0" y={-24} fill="#FFD60A" fontSize="17" fontWeight="600" textAnchor="middle">{fmtZoom(zoom)}×</text>
+      </g>
     </svg>
   );
 }
