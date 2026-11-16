@@ -55,18 +55,66 @@ export function haptic(kind: HapticKind = "light", force = false) {
 
 /**
  * Feedback aptico automatico su ogni pulsante dell'app: basta chiamarla una volta (restituisce la funzione di pulizia).
- * Ascolta in fase di "bubbling", cioè DOPO i gestori dei pulsanti: se un pulsante ha già fatto il suo tic
- * (otturatore, doppio click del loop...) qui non se ne aggiunge un secondo.
+ *
+ * - Android: un tic con navigator.vibrate a ogni click.
+ * - iPhone: Safari fa vibrare SOLO se il dito tocca davvero un interruttore (<input switch>); un clic simulato
+ *   da codice non basta. Quindi sopra ogni pulsante mettiamo un interruttore trasparente: il dito tocca quello
+ *   (vibra), e il clic risale fino al pulsante, che esegue la sua azione normalmente.
  */
+const HOST_SELECTOR = "button, [role='button'], [role='switch']";
+/** Elementi su cui NON mettere l'interruttore trasparente (selettore CSS). Lascia vuoto per metterlo ovunque. */
+const SKIP_SELECTOR = "";
+
 export function installButtonHaptics() {
-  const onClick = (e: MouseEvent) => {
-    const el = e.target instanceof Element ? e.target.closest("button, [role='button'], [role='switch']") : null;
-    if (!el || (el as HTMLButtonElement).disabled) return;
-    if (performance.now() - lastHapticAt < 120) return;
-    haptic("light", true);
+  if (typeof document === "undefined") return () => {};
+
+  if (navigator.vibrate) {
+    const onClick = (e: MouseEvent) => {
+      const el = e.target instanceof Element ? e.target.closest(HOST_SELECTOR) : null;
+      if (!el || (el as HTMLButtonElement).disabled) return;
+      if (performance.now() - lastHapticAt < 120) return;
+      haptic("light", true);
+    };
+    window.addEventListener("click", onClick);
+    return () => window.removeEventListener("click", onClick);
+  }
+
+  const style = document.createElement("style");
+  style.textContent =
+    ".hx-ov{position:absolute;left:0;top:0;width:100%;height:100%;margin:0;padding:0;opacity:0;z-index:2;-webkit-tap-highlight-color:transparent}" +
+    "button:disabled>.hx-ov{pointer-events:none}";
+  document.head.appendChild(style);
+
+  const attach = () => {
+    document.querySelectorAll<HTMLElement>(HOST_SELECTOR).forEach((host) => {
+      if (host.querySelector(":scope > input.hx-ov")) return;
+      if (SKIP_SELECTOR && host.matches(SKIP_SELECTOR)) return;
+      if (getComputedStyle(host).position === "static") host.style.position = "relative";
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.setAttribute("switch", "");
+      input.setAttribute("aria-hidden", "true");
+      input.tabIndex = -1;
+      input.className = "hx-ov";
+      host.appendChild(input);
+    });
   };
-  window.addEventListener("click", onClick);
-  return () => window.removeEventListener("click", onClick);
+
+  let raf = 0;
+  const schedule = () => {
+    if (raf) return;
+    raf = requestAnimationFrame(() => { raf = 0; attach(); });
+  };
+  attach();
+  const mo = new MutationObserver(schedule);
+  mo.observe(document.body, { childList: true, subtree: true });
+
+  return () => {
+    mo.disconnect();
+    if (raf) cancelAnimationFrame(raf);
+    style.remove();
+    document.querySelectorAll("input.hx-ov").forEach((n) => n.remove());
+  };
 }
 
 function sound() {
