@@ -16,7 +16,7 @@ import {
   Zap,
 } from "lucide-react";
 import { LoopRecorder, SimpleRecorder, pickMime, uid, type Clip } from "@/lib/recorder";
-import { TIC_MS, doubleTic, tic, tripleTic, unlockFeedback } from "@/lib/feedback";
+import { TIC_MS, doubleTic, haptic, installButtonHaptics, tic, tripleTic, unlockFeedback } from "@/lib/feedback";
 
 type Mode = "timelapse" | "loop" | "video" | "photo" | "burst";
 // Stesso ordine del selettore di iOS: i modi video a sinistra, quelli foto a destra.
@@ -41,11 +41,13 @@ const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).p
 const zoomLabel = (z: number) => String(z).replace(".", ",");
 const MAX_ZOOM = 15;
 /** Quadrante dello zoom ad arco: raggio in px e gradi di rotazione per ogni "e-fold" di zoom.
- *  DIAL_K più basso = zoom più veloce (con 20 da 1× a 15× bastano ~54° di arco, circa 120 px di
- *  spostamento orizzontale del pollice; con 40 servivano ~108° e a volte due passate).
- *  Per regolare la sensibilità cambia solo questo valore (es. 16 = molto veloce, 26 = più preciso). */
+ *  DIAL_K = quanto è "larga" la mezza luna disegnata (le tacche sono distanziate come nell'originale).
+ *  DIAL_INPUT_K = quanto il dito deve muoversi: più basso = zoom più veloce. Con 20 da 1× a 15× bastano ~54° di
+ *  arco (circa 120 px di pollice); con 40 servivano ~108°. Le tacche scorrono quindi ~2× più veloci del dito.
+ *  Per regolare la sensibilità cambia solo DIAL_INPUT_K (es. 16 = molto veloce, 26 = più preciso). */
 const DIAL_R = 170;
-const DIAL_K = 20;
+const DIAL_K = 40;
+const DIAL_INPUT_K = 20;
 /** L'arco viene disegnato sollevato di questi px sopra i pulsanti, così non copre il selettore dei modi. */
 const DIAL_SHIFT = 84;
 const DIAL_SPAN = 50;
@@ -403,7 +405,7 @@ export function ActionCam() {
     if (recording) return;
     const i = MODES.findIndex((m) => m.id === mode);
     const next = MODES[i + delta];
-    if (next) setMode(next.id);
+    if (next) { setMode(next.id); haptic("light", true); }
   };
 
   // Swipe orizzontale su mirino e selettore = cambia modo. Il gesto va letto nelle coordinate dell'interfaccia (che può essere ruotata).
@@ -421,6 +423,35 @@ export function ActionCam() {
     else if (Math.abs(ux) < 10 && Math.abs(uy) < 10) onTap?.(e);
   };
 
+  // Feedback aptico su tutti i pulsanti.
+  useEffect(() => installButtonHaptics(), []);
+
+  // Feedback aptico durante lo zoom continuo (pizzico e mezza luna): un tic a ogni tacca che passa,
+  // più deciso sulle tacche principali (1×, 2×, 3×, 5×, 10×, 15×) e un colpo forte ai limiti.
+  const zoomBucketRef = useRef(0);
+  const zoomLimitRef = useRef<"min" | "max" | null>(null);
+  const zoomStops = (majorsOnly: boolean) => (majorsOnly ? DIAL_TICKS.filter((t) => t.major) : DIAL_TICKS);
+  const zoomBucket = (z: number, majorsOnly: boolean) => zoomStops(majorsOnly).filter((t) => z >= t.v - 1e-6).length;
+  const zoomLimit = (z: number) => (z >= MAX_ZOOM - 1e-6 ? "max" : z <= minZoom + 1e-6 ? "min" : null);
+  /** Da chiamare all'inizio del gesto: memorizza la posizione di partenza senza vibrare. */
+  const zoomHapticInit = (z: number, majorsOnly = false) => {
+    zoomBucketRef.current = zoomBucket(z, majorsOnly);
+    zoomLimitRef.current = zoomLimit(z);
+  };
+  const zoomHaptic = (z: number, majorsOnly = false) => {
+    const limit = zoomLimit(z);
+    const b = zoomBucket(z, majorsOnly);
+    const prevB = zoomBucketRef.current;
+    zoomBucketRef.current = b;
+    if (limit !== zoomLimitRef.current) {
+      zoomLimitRef.current = limit;
+      if (limit) { haptic("heavy", true); return; }
+    }
+    if (b === prevB) return;
+    const crossed = zoomStops(majorsOnly)[Math.max(b, prevB) - 1];
+    haptic(crossed?.major ? "medium" : "light");
+  };
+
   // Pizzico con due dita sul mirino = zoom continuo.
   const pointersRef = useRef(new Map<number, { x: number; y: number }>());
   const pinchRef = useRef<{ dist: number; zoom: number } | null>(null);
@@ -435,6 +466,7 @@ export function ActionCam() {
       if (useUltra && recording) return;
       const wasUltra = leaveUltra();
       pinchRef.current = { dist: pinchDist() || 1, zoom: wasUltra ? 1 : zoom };
+      zoomHapticInit(wasUltra ? 1 : zoom, true);
       gestureRef.current = null;
       setPinching(true);
     } else if (pointersRef.current.size === 1) onGestureDown(e);
@@ -443,7 +475,11 @@ export function ActionCam() {
     if (!pointersRef.current.has(e.pointerId)) return;
     pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     const p = pinchRef.current;
-    if (p && pointersRef.current.size >= 2) setZoom(clampZoom(p.zoom * (pinchDist() / p.dist)));
+    if (p && pointersRef.current.size >= 2) {
+      const nz = clampZoom(p.zoom * (pinchDist() / p.dist));
+      setZoom(nz);
+      zoomHaptic(nz, true);
+    }
   };
   const vfUp = (e: React.PointerEvent) => {
     pointersRef.current.delete(e.pointerId);
@@ -477,6 +513,8 @@ export function ActionCam() {
     d.active = true;
     if (leaveUltra()) d.z = 1;
     try { d.target.setPointerCapture(d.pointerId); } catch { /* ignore */ }
+    zoomHapticInit(d.z);
+    haptic("medium", true);
     setDialOn(true);
     setPinching(true);
   };
@@ -497,7 +535,9 @@ export function ActionCam() {
       if (!d.active) return;
     }
     const { ux, uy } = dialOffset(d, e);
-    setZoom(clampZoom(Math.exp(Math.log(d.z) + (dialAngle(ux, uy) - d.ang0) / DIAL_K)));
+    const nz = clampZoom(Math.exp(Math.log(d.z) + (dialAngle(ux, uy) - d.ang0) / DIAL_INPUT_K));
+    setZoom(nz);
+    zoomHaptic(nz);
   };
   const pillsUp = () => {
     const d = zoomDragRef.current;
@@ -512,6 +552,7 @@ export function ActionCam() {
   };
 
   const tapViewfinder = (e: React.PointerEvent) => {
+    haptic("light", true);
     setOptionsOpen(false); setSub(null);
     setFocus({ x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY, id: Date.now() });
   };
