@@ -19,10 +19,21 @@ export function unlockFeedback() {
   }
 }
 
-function haptic() {
+/** Intensità del feedback: su Android cambia la durata della vibrazione; su iPhone il "tic" è unico. */
+export type HapticKind = "light" | "medium" | "heavy";
+const HAPTIC_MS: Record<HapticKind, number> = { light: 8, medium: 15, heavy: 28 };
+let lastHapticAt = 0;
+/** Intervallo minimo tra due tic: evita che il motore vibrante "impasti" i tic durante uno scorrimento veloce. */
+const HAPTIC_MIN_GAP = 22;
+
+/** Un singolo tic aptico. Se `force` è falso, i tic troppo ravvicinati vengono saltati. */
+export function haptic(kind: HapticKind = "light", force = false) {
+  const now = performance.now();
+  if (!force && now - lastHapticAt < HAPTIC_MIN_GAP) return;
+  lastHapticAt = now;
   try {
     if (navigator.vibrate) {
-      navigator.vibrate(15);
+      navigator.vibrate(HAPTIC_MS[kind]);
       return;
     }
     if (!hapticEl) {
@@ -40,6 +51,22 @@ function haptic() {
   } catch {
     /* ignore */
   }
+}
+
+/**
+ * Feedback aptico automatico su ogni pulsante dell'app: basta chiamarla una volta (restituisce la funzione di pulizia).
+ * Ascolta in fase di "bubbling", cioè DOPO i gestori dei pulsanti: se un pulsante ha già fatto il suo tic
+ * (otturatore, doppio click del loop...) qui non se ne aggiunge un secondo.
+ */
+export function installButtonHaptics() {
+  const onClick = (e: MouseEvent) => {
+    const el = e.target instanceof Element ? e.target.closest("button, [role='button'], [role='switch']") : null;
+    if (!el || (el as HTMLButtonElement).disabled) return;
+    if (performance.now() - lastHapticAt < 120) return;
+    haptic("light", true);
+  };
+  window.addEventListener("click", onClick);
+  return () => window.removeEventListener("click", onClick);
 }
 
 function sound() {
@@ -67,12 +94,12 @@ function tics(count: number, gapMs: number) {
     // Il primo tic parte subito, dentro il tocco dell'utente: iOS accetta l'aptico solo così.
     if (i === 0) {
       sound();
-      haptic();
+      haptic("medium", true);
       continue;
     }
     setTimeout(() => {
       sound();
-      haptic();
+      haptic("medium", true);
     }, i * gapMs);
   }
 }
