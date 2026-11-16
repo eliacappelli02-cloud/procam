@@ -40,9 +40,12 @@ const TOP_BAR = 44;
 const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 const zoomLabel = (z: number) => String(z).replace(".", ",");
 const MAX_ZOOM = 15;
-/** Quadrante dello zoom ad arco: raggio in px e gradi di rotazione per ogni "e-fold" di zoom. */
+/** Quadrante dello zoom ad arco: raggio in px e gradi di rotazione per ogni "e-fold" di zoom.
+ *  DIAL_K più basso = zoom più veloce (con 20 da 1× a 15× bastano ~54° di arco, circa 120 px di
+ *  spostamento orizzontale del pollice; con 40 servivano ~108° e a volte due passate).
+ *  Per regolare la sensibilità cambia solo questo valore (es. 16 = molto veloce, 26 = più preciso). */
 const DIAL_R = 170;
-const DIAL_K = 40;
+const DIAL_K = 20;
 /** L'arco viene disegnato sollevato di questi px sopra i pulsanti, così non copre il selettore dei modi. */
 const DIAL_SHIFT = 84;
 const DIAL_SPAN = 50;
@@ -957,8 +960,8 @@ function ZoomDial({ zoom, minZoom }: { zoom: number; minZoom: number }) {
   })();
   return (
     <svg className="fade-in pointer-events-none absolute left-1/2 top-1/2 overflow-visible" width="1" height="1" aria-hidden="true">
-      <g transform={`translate(0 ${-DIAL_SHIFT})`}>
-        <path d={band} fill="rgba(28,28,30,0.28)" />
+      <g transform={`translate(0 ${-DIAL_SHIFT})`} style={{ filter: "drop-shadow(0 0 2px rgba(0,0,0,0.65)) drop-shadow(0 0 5px rgba(0,0,0,0.35))" }}>
+        <path d={band} fill="none" />
         {DIAL_TICKS.filter((t) => t.v >= minZoom - 1e-6 && t.v <= MAX_ZOOM + 1e-6).map((t) => {
           const f = phi(t.v);
           const off = Math.abs(f - 90);
