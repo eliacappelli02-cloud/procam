@@ -137,6 +137,69 @@ function sound() {
   }
 }
 
+/**
+ * Suono "orologio da polso" per lo scorrimento dello zoom: un tic brevissimo, acuto e metallico, che alterna
+ * due toni (tic / tock). Il tono sale leggermente con lo zoom (t da 0 a 1).
+ * Tre tipi: tacca normale, tacca principale (più piena e più grave), limite (ancora più grave e lunga).
+ * Per regolarlo: VOLUME = volume generale, PITCH_RISE = quanto sale il tono con lo zoom (0 = per niente).
+ */
+export type ZoomTickKind = "minor" | "major" | "limit";
+const VOLUME = 0.8;
+const PITCH_RISE = 0.25;
+let lastTickAt = 0;
+let tickFlip = false;
+let noiseBuf: AudioBuffer | null = null;
+
+export function zoomTick(kind: ZoomTickKind, t = 0.5) {
+  if (!ctx) return;
+  const now = performance.now();
+  if (kind !== "limit" && now - lastTickAt < 18) return;
+  lastTickAt = now;
+  try {
+    if (ctx.state === "suspended") void ctx.resume();
+    if (!noiseBuf) {
+      noiseBuf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.2), ctx.sampleRate);
+      const d = noiseBuf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    }
+    const k = kind === "major" ? { g: 1.5, d: 1.5, p: 0.85 } : kind === "limit" ? { g: 1.4, d: 2, p: 0.6 } : { g: 1, d: 1, p: 1 };
+    k.p *= 1 + (Math.min(1, Math.max(0, t)) - 0.5) * PITCH_RISE;
+    tickFlip = !tickFlip;
+    const t0 = ctx.currentTime + 0.001;
+
+    // 1) fruscio filtrato (il "tic" metallico)
+    const dur1 = 0.012 * k.d;
+    const src = ctx.createBufferSource();
+    src.buffer = noiseBuf;
+    const flt = ctx.createBiquadFilter();
+    flt.type = "bandpass";
+    flt.frequency.value = (tickFlip ? 4800 : 5600) * k.p;
+    flt.Q.value = 9;
+    const g1 = ctx.createGain();
+    g1.gain.setValueAtTime(0.0001, t0);
+    g1.gain.linearRampToValueAtTime(0.4 * k.g * VOLUME, t0 + 0.0008);
+    g1.gain.exponentialRampToValueAtTime(0.0001, t0 + dur1);
+    src.connect(flt).connect(g1).connect(ctx.destination);
+    src.start(t0);
+    src.stop(t0 + dur1 + 0.02);
+
+    // 2) piccolo tono acuto sotto il fruscio
+    const dur2 = 0.02 * k.d;
+    const osc = ctx.createOscillator();
+    osc.type = "sine";
+    osc.frequency.value = (tickFlip ? 3500 : 4100) * k.p;
+    const g2 = ctx.createGain();
+    g2.gain.setValueAtTime(0.0001, t0);
+    g2.gain.linearRampToValueAtTime(0.06 * k.g * VOLUME, t0 + 0.002);
+    g2.gain.exponentialRampToValueAtTime(0.0001, t0 + dur2);
+    osc.connect(g2).connect(ctx.destination);
+    osc.start(t0);
+    osc.stop(t0 + dur2 + 0.02);
+  } catch {
+    /* ignore */
+  }
+}
+
 function tics(count: number, gapMs: number) {
   for (let i = 0; i < count; i++) {
     // Il primo tic parte subito, dentro il tocco dell'utente: iOS accetta l'aptico solo così.
