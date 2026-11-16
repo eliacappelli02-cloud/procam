@@ -162,9 +162,7 @@ export function ActionCam() {
       const [w, h] = RES[res];
       const s = await navigator.mediaDevices.getUserMedia({
         video: { ...(useUltra && ultraIdRef.current ? { deviceId: { exact: ultraIdRef.current } } : { facingMode: facing }), width: { ideal: w }, height: { ideal: h }, frameRate: { ideal: fps } },
-        // Niente microfono nell'anteprima: su iPhone, finché il microfono è aperto, il sistema spegne le vibrazioni.
-        // Il microfono si apre solo mentre registri (vedi openMic).
-        audio: false,
+        audio,
       });
       streamRef.current = s;
       if (videoRef.current) videoRef.current.srcObject = s;
@@ -182,7 +180,7 @@ export function ActionCam() {
       setError("Impossibile accedere alla fotocamera. Consenti l'accesso e usa HTTPS.");
       console.error(e);
     }
-  }, [facing, res, fps, useUltra]);
+  }, [facing, res, fps, audio, useUltra]);
 
   useEffect(() => { if (started && !recording) startCamera(); }, [started, startCamera]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -263,14 +261,6 @@ export function ActionCam() {
     setCountdown(0);
   };
 
-  // Microfono aperto solo durante la registrazione (così le vibrazioni funzionano nel resto dell'uso).
-  const micRef = useRef<MediaStream | null>(null);
-  const openMic = async () => {
-    try { micRef.current = await navigator.mediaDevices.getUserMedia({ audio: true }); return micRef.current; }
-    catch { return null; }
-  };
-  const closeMic = () => { micRef.current?.getTracks().forEach((t) => t.stop()); micRef.current = null; };
-
   const bitrate = res === "4K" ? 40e6 : res === "1080p" ? 16e6 : 8e6;
 
   const shutter = async () => {
@@ -291,19 +281,14 @@ export function ActionCam() {
     startingRef.current = true;
     tic();
     await new Promise((r) => setTimeout(r, TIC_MS + 120));
-    let rs: MediaStream = s;
-    if (audio && (mode === "video" || mode === "loop")) {
-      const m = await openMic();
-      if (m) rs = new MediaStream([...s.getVideoTracks(), ...m.getAudioTracks()]);
-    }
     startingRef.current = false;
     setElapsed(0);
     setRecording(true);
     setOptionsOpen(false); setSub(null);
-    if (mode === "video") recRef.current = new SimpleRecorder(rs, (b) => addClip(b, "video", `Video ${res} ${fps}fps`), bitrate);
+    if (mode === "video") recRef.current = new SimpleRecorder(s, (b) => addClip(b, "video", `Video ${res} ${fps}fps`), bitrate);
     if (mode === "loop") {
       setLoopLocked(false);
-      loopRef.current = new LoopRecorder(rs, loopMin * 60, bitrate);
+      loopRef.current = new LoopRecorder(s, loopMin * 60, bitrate);
       loopRef.current.start();
     }
     if (mode === "timelapse") tlRef.current = startTimelapse();
@@ -340,7 +325,6 @@ export function ActionCam() {
     recRef.current?.stop(); recRef.current = null;
     tlRef.current?.stop(); tlRef.current = null;
     const loopStop = loopRef.current ? loopRef.current.stop() : null;
-    closeMic();
     tripleTic();
     if (loopStop) {
       const r = await loopStop;
