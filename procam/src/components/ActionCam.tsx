@@ -951,20 +951,20 @@ function ZoomDial({ zoom, minZoom }: { zoom: number; minZoom: number }) {
     return { x: r * Math.cos(a), y: R - r * Math.sin(a) };
   };
   const band = (() => {
-    const o = R + 14, i = R - 58;
+    const o = R + 8, i = R - 44;
     const a = pt(90 + SPAN, o), b = pt(90 - SPAN, o), c = pt(90 - SPAN, i), d = pt(90 + SPAN, i);
     return `M ${a.x} ${a.y} A ${o} ${o} 0 0 1 ${b.x} ${b.y} L ${c.x} ${c.y} A ${i} ${i} 0 0 0 ${d.x} ${d.y} Z`;
   })();
   return (
     <svg className="fade-in pointer-events-none absolute left-1/2 top-1/2 overflow-visible" width="1" height="1" aria-hidden="true">
       <g transform={`translate(0 ${-DIAL_SHIFT})`}>
-        <path d={band} fill="rgba(28,28,30,0.55)" />
+        <path d={band} fill="rgba(28,28,30,0.28)" />
         {DIAL_TICKS.filter((t) => t.v >= minZoom - 1e-6 && t.v <= MAX_ZOOM + 1e-6).map((t) => {
           const f = phi(t.v);
           const off = Math.abs(f - 90);
           if (off > SPAN - 2) return null;
-          const p1 = pt(f, R + 2), p2 = pt(f, R - (t.major ? 16 : 9));
-          const lab = pt(f, R - 36);
+          const p1 = pt(f, R + 1), p2 = pt(f, R - (t.major ? 13 : 8));
+          const lab = pt(f, R - 29);
           const op = Math.max(0.15, 1 - off / 65);
           return (
             <g key={t.v} opacity={op}>
@@ -978,7 +978,7 @@ function ZoomDial({ zoom, minZoom }: { zoom: number; minZoom: number }) {
           );
         })}
         {/* indicatore fisso al centro e valore attuale */}
-        <line x1="0" y1={-6} x2="0" y2={24} stroke="#FFD60A" strokeWidth="3" strokeLinecap="round" />
+        <line x1="0" y1={-5} x2="0" y2={19} stroke="#FFD60A" strokeWidth="3" strokeLinecap="round" />
         <text x="0" y={-24} fill="#FFD60A" fontSize="17" fontWeight="600" textAnchor="middle">{fmtZoom(zoom)}×</text>
       </g>
     </svg>
