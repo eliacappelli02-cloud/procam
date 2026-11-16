@@ -40,6 +40,16 @@ const TOP_BAR = 44;
 const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 const zoomLabel = (z: number) => String(z).replace(".", ",");
 const MAX_ZOOM = 15;
+/** Quadrante dello zoom ad arco: raggio in px e gradi di rotazione per ogni "e-fold" di zoom. */
+const DIAL_R = 210;
+const DIAL_K = 40;
+const DIAL_TICKS: { v: number; major?: boolean }[] = [
+  { v: 0.5, major: true }, { v: 0.6 }, { v: 0.7 }, { v: 0.8 }, { v: 0.9 },
+  { v: 1, major: true }, { v: 1.25 }, { v: 1.5 }, { v: 1.75 },
+  { v: 2, major: true }, { v: 2.5 }, { v: 3, major: true }, { v: 4 },
+  { v: 5, major: true }, { v: 6 }, { v: 7 }, { v: 8 }, { v: 9 },
+  { v: 10, major: true }, { v: 12.5 }, { v: 15, major: true },
+];
 const ZOOM_PRESETS = [0.5, 1, 2, 3];
 /** Valore dello zoom con una cifra decimale, in italiano (es. 2,4). */
 const fmtZoom = (z: number) => String(Math.round(z * 10) / 10).replace(".", ",");
@@ -87,6 +97,7 @@ export function ActionCam() {
   const [useUltra, setUseUltra] = useState(false);
   const [flipTurns, setFlipTurns] = useState(0);
   const [pinching, setPinching] = useState(false);
+  const [dialOn, setDialOn] = useState(false);
   const [focus, setFocus] = useState<{ x: number; y: number; id: number } | null>(null);
   const ultraIdRef = useRef<string | null>(null);
 
@@ -443,30 +454,56 @@ export function ActionCam() {
     if (pointersRef.current.size < 2) { pinchRef.current = null; setPinching(false); }
   };
 
-  // Trascinando sulla barra dei pulsanti si fa zoom in modo continuo (verso sinistra = avvicina).
-  const zoomDragRef = useRef<{ x: number; y: number; z: number; moved: boolean } | null>(null);
+  // Quadrante ad arco (∩): tieni premuto o trascina sui pulsanti dello zoom e segui la curva col dito,
+  // anche scendendo ai lati. Verso sinistra = avvicina, verso destra = allontana.
+  type ZoomDrag = { cx: number; cy: number; z: number; ang0: number; active: boolean; target: HTMLElement; pointerId: number; timer: ReturnType<typeof setTimeout> | undefined; x0: number; y0: number };
+  const zoomDragRef = useRef<ZoomDrag | null>(null);
   const suppressClickRef = useRef(false);
-  const pillsDown = (e: React.PointerEvent) => { zoomDragRef.current = { x: e.clientX, y: e.clientY, z: zoom, moved: false }; };
+  /** Posizione del dito rispetto al centro dei pulsanti, nelle coordinate dell'interfaccia (che può essere ruotata). */
+  const dialOffset = (d: ZoomDrag, e: { clientX: number; clientY: number }) => {
+    const th = (orient.angle * Math.PI) / 180;
+    const sx = e.clientX - d.cx, sy = e.clientY - d.cy;
+    return { ux: sx * Math.cos(th) - sy * Math.sin(th), uy: sx * Math.sin(th) + sy * Math.cos(th) };
+  };
+  const dialAngle = (ux: number, uy: number) => (Math.atan2(DIAL_R - uy, ux) * 180) / Math.PI;
+  const activateDial = (d: ZoomDrag) => {
+    if (d.active || (useUltra && recording)) return;
+    d.active = true;
+    if (leaveUltra()) d.z = 1;
+    try { d.target.setPointerCapture(d.pointerId); } catch { /* ignore */ }
+    setDialOn(true);
+    setPinching(true);
+  };
+  const pillsDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const d: ZoomDrag = { cx: r.left + r.width / 2, cy: r.top + r.height / 2, z: zoom, ang0: 90, active: false, target: e.currentTarget, pointerId: e.pointerId, timer: undefined, x0: e.clientX, y0: e.clientY };
+    const o = dialOffset(d, e);
+    d.ang0 = dialAngle(o.ux, o.uy);
+    d.timer = setTimeout(() => activateDial(d), 250);
+    zoomDragRef.current = d;
+  };
   const pillsMove = (e: React.PointerEvent<HTMLDivElement>) => {
     const d = zoomDragRef.current;
     if (!d) return;
-    const th = (orient.angle * Math.PI) / 180;
-    const dx = e.clientX - d.x, dy = e.clientY - d.y;
-    const ux = dx * Math.cos(th) - dy * Math.sin(th);
-    if (!d.moved) {
-      if (Math.abs(ux) < 8) return;
-      if (useUltra && recording) return;
-      d.moved = true;
-      if (leaveUltra()) d.z = 1;
-      e.currentTarget.setPointerCapture(e.pointerId);
-      setPinching(true);
+    if (!d.active) {
+      if (Math.hypot(e.clientX - d.x0, e.clientY - d.y0) < 8) return;
+      activateDial(d);
+      if (!d.active) return;
     }
-    setZoom(clampZoom(d.z * Math.pow(2, -ux / 70)));
+    const { ux, uy } = dialOffset(d, e);
+    setZoom(clampZoom(Math.exp(Math.log(d.z) + (dialAngle(ux, uy) - d.ang0) / DIAL_K)));
   };
   const pillsUp = () => {
-    const moved = zoomDragRef.current?.moved;
+    const d = zoomDragRef.current;
     zoomDragRef.current = null;
-    if (moved) { setPinching(false); suppressClickRef.current = true; setTimeout(() => { suppressClickRef.current = false; }, 0); }
+    if (!d) return;
+    clearTimeout(d.timer);
+    if (d.active) {
+      setDialOn(false);
+      setPinching(false);
+      suppressClickRef.current = true;
+      setTimeout(() => { suppressClickRef.current = false; }, 0);
+    }
   };
 
   const tapViewfinder = (e: React.PointerEvent) => {
@@ -608,7 +645,7 @@ export function ActionCam() {
           ) : (
             <div className="absolute inset-x-0 flex justify-center" style={{ bottom: `calc(var(--sa-bottom) + ${CONTROLS_H + 10}px)` }}>
               <div
-                className="glass flex touch-none items-center gap-1 rounded-full p-[3px]"
+                className={`glass flex touch-none items-center gap-1 rounded-full p-[3px] transition-opacity ${dialOn ? "opacity-0" : ""}`}
                 onPointerDown={pillsDown}
                 onPointerMove={pillsMove}
                 onPointerUp={pillsUp}
@@ -628,6 +665,7 @@ export function ActionCam() {
                   );
                 })}
               </div>
+              {dialOn && <ZoomDial zoom={zoom} minZoom={minZoom} />}
             </div>
           )}
         </div>
@@ -897,5 +935,48 @@ function Switch({ on, onChange, disabled }: { on: boolean; onChange: (v: boolean
     >
       <span className={`absolute left-[2px] top-[2px] h-[27px] w-[27px] rounded-full bg-white shadow-md transition-transform duration-200 ${on ? "translate-x-5" : ""}`} />
     </button>
+  );
+}
+
+/** Quadrante dello zoom ad arco (∩) con tacche e numeri, in stile iOS. L'origine è il centro dei pulsanti dello zoom. */
+function ZoomDial({ zoom, minZoom }: { zoom: number; minZoom: number }) {
+  const R = DIAL_R;
+  const lnz = Math.log(zoom);
+  const phi = (v: number) => 90 - DIAL_K * (Math.log(v) - lnz);
+  const pt = (deg: number, r: number) => {
+    const a = (deg * Math.PI) / 180;
+    return { x: r * Math.cos(a), y: R - r * Math.sin(a) };
+  };
+  const SPAN = 62;
+  const band = (() => {
+    const o = R + 18, i = R - 78;
+    const a = pt(90 + SPAN, o), b = pt(90 - SPAN, o), c = pt(90 - SPAN, i), d = pt(90 + SPAN, i);
+    return `M ${a.x} ${a.y} A ${o} ${o} 0 0 1 ${b.x} ${b.y} L ${c.x} ${c.y} A ${i} ${i} 0 0 0 ${d.x} ${d.y} Z`;
+  })();
+  return (
+    <svg className="fade-in pointer-events-none absolute left-1/2 top-1/2 overflow-visible" width="1" height="1" aria-hidden="true">
+      <path d={band} fill="rgba(28,28,30,0.55)" />
+      {DIAL_TICKS.filter((t) => t.v >= minZoom - 1e-6 && t.v <= MAX_ZOOM + 1e-6).map((t) => {
+        const f = phi(t.v);
+        const off = Math.abs(f - 90);
+        if (off > SPAN - 2) return null;
+        const p1 = pt(f, R + 2), p2 = pt(f, R - (t.major ? 18 : 10));
+        const lab = pt(f, R - 40);
+        const op = Math.max(0.15, 1 - off / 75);
+        return (
+          <g key={t.v} opacity={op}>
+            <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke="#fff" strokeWidth={t.major ? 2 : 1.4} strokeLinecap="round" />
+            {t.major && (
+              <text x={lab.x} y={lab.y} fill="#fff" fontSize="13" fontWeight="600" textAnchor="middle" dominantBaseline="middle" transform={`rotate(${90 - f} ${lab.x} ${lab.y})`}>
+                {String(t.v).replace(".", ",")}
+              </text>
+            )}
+          </g>
+        );
+      })}
+      {/* indicatore fisso al centro */}
+      <line x1="0" y1={-6} x2="0" y2={26} stroke="#FFD60A" strokeWidth="3" strokeLinecap="round" />
+      <text x="0" y={-26} fill="#FFD60A" fontSize="17" fontWeight="600" textAnchor="middle">{fmtZoom(zoom)}×</text>
+    </svg>
   );
 }
