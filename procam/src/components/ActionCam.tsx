@@ -16,7 +16,7 @@ import {
   Zap,
 } from "lucide-react";
 import { LoopRecorder, SimpleRecorder, pickMime, uid, type Clip } from "@/lib/recorder";
-import { TIC_MS, doubleTic, haptic, installButtonHaptics, tic, tripleTic, unlockFeedback, zoomTick } from "@/lib/feedback";
+import { TIC_MS, doubleTic, haptic, installButtonHaptics, tic, tripleTic, unlockFeedback } from "@/lib/feedback";
 
 type Mode = "timelapse" | "loop" | "video" | "photo" | "burst";
 // Stesso ordine del selettore di iOS: i modi video a sinistra, quelli foto a destra.
@@ -443,17 +443,13 @@ export function ActionCam() {
     const b = zoomBucket(z, majorsOnly);
     const prevB = zoomBucketRef.current;
     zoomBucketRef.current = b;
-    // Suono morbido sulle tacche; non durante una registrazione con audio, altrimenti finirebbe nel video.
-    const quiet = recording && audio;
-    const tz = (Math.log(z) - Math.log(minZoom)) / (Math.log(MAX_ZOOM) - Math.log(minZoom));
     if (limit !== zoomLimitRef.current) {
       zoomLimitRef.current = limit;
-      if (limit) { haptic("heavy", true); if (!quiet) zoomTick("limit", tz); return; }
+      if (limit) { haptic("heavy", true); return; }
     }
     if (b === prevB) return;
     const crossed = zoomStops(majorsOnly)[Math.max(b, prevB) - 1];
     haptic(crossed?.major ? "medium" : "light");
-    if (!quiet) zoomTick(crossed?.major ? "major" : "minor", tz);
   };
 
   // Pizzico con due dita sul mirino = zoom continuo.
