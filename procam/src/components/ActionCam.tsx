@@ -208,6 +208,31 @@ export function ActionCam() {
     setLevel((v) => !v);
   };
 
+  // Tiene lo schermo acceso mentre registri: altrimenti l'iPhone si blocca da solo e interrompe il video.
+  useEffect(() => {
+    if (!recording) return;
+    type WL = { release: () => Promise<void> };
+    const nav = navigator as unknown as { wakeLock?: { request: (t: "screen") => Promise<WL> } };
+    if (!nav.wakeLock) return;
+    const held: { l: WL | null } = { l: null };
+    let cancelled = false;
+    const acquire = async () => {
+      try {
+        const l = await nav.wakeLock!.request("screen");
+        if (cancelled) { void l.release().catch(() => {}); return; }
+        held.l = l;
+      } catch { /* non concesso (es. risparmio energetico) */ }
+    };
+    const onVis = () => { if (document.visibilityState === "visible") void acquire(); };
+    void acquire();
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      cancelled = true;
+      document.removeEventListener("visibilitychange", onVis);
+      void held.l?.release().catch(() => {});
+    };
+  }, [recording]);
+
   useEffect(() => {
     if (!recording) return;
     const start = Date.now();
