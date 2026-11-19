@@ -92,6 +92,7 @@ export function ActionCam() {
   const [elapsed, setElapsed] = useState(0);
   const [loopLocked, setLoopLocked] = useState(false);
   const [loopBuf, setLoopBuf] = useState(0);
+  const [loopCatch, setLoopCatch] = useState(false); // livello trasparente a schermo intero per bloccare il loop
   const [countdown, setCountdown] = useState(0);
   const [flash, setFlash] = useState(false);
   const [clips, setClips] = useState<Clip[]>([]);
@@ -370,6 +371,15 @@ export function ActionCam() {
     const i = setInterval(() => setLoopBuf(loopRef.current?.buffered() ?? 0), 500);
     return () => clearInterval(i);
   }, [recording, mode]);
+
+  // Loop: finché non è bloccato, qualsiasi tocco sullo schermo lo blocca. Dopo il blocco il livello resta ancora
+  // 0,7 s, così un secondo tocco involontario non finisce sul tasto stop.
+  useEffect(() => {
+    if (!(recording && mode === "loop")) { setLoopCatch(false); return; }
+    if (!loopLocked) { setLoopCatch(true); return; }
+    const t = setTimeout(() => setLoopCatch(false), 700);
+    return () => clearTimeout(t);
+  }, [recording, mode, loopLocked]);
 
   // Tasti volume (+ = scatto / avvia / blocca loop / stop, − = stop). Funziona dove il browser li passa alla pagina.
   useEffect(() => { actionsRef.current = { shutter: () => { if (countdown === 0) void shutter(); }, stop: () => { if (recording) void stopRec(); } }; });
@@ -812,7 +822,7 @@ export function ActionCam() {
 
           {mode === "loop" && recording && (
             <div className="rot glass absolute left-1/2 top-[48px] -translate-x-1/2 whitespace-nowrap rounded-full px-3 py-1 text-[12px] font-medium tnum">
-              {loopLocked ? "Loop bloccato · registrazione" : `Loop ${fmt(Math.min(loopBuf, loopMin * 60))} / ${fmt(loopMin * 60)}`}
+              {loopLocked ? "Loop bloccato · registrazione" : `Loop ${fmt(Math.min(loopBuf, loopMin * 60))} / ${fmt(loopMin * 60)} · tocca ovunque per bloccare`}
             </div>
           )}
 
@@ -873,6 +883,17 @@ export function ActionCam() {
             )}
           </footer>
         </div>
+
+        {/* Loop in corso, non ancora bloccato: tutto lo schermo è un unico tasto trasparente "blocca loop" */}
+        {loopCatch && (
+          <div
+            role="button"
+            aria-label="Blocca loop"
+            className="absolute inset-0 z-30"
+            style={{ touchAction: "none" }}
+            onClick={() => { if (!loopLocked) void shutter(); }}
+          />
+        )}
 
         {/* Impostazioni */}
         {panel === "settings" && (
