@@ -636,6 +636,8 @@ export function ActionCam() {
   const vfTop = "0px";
   const vfHeight = "100cqh";
   const levelOk = Math.abs(tilt) < 2;
+  // Loop in corso e non ancora bloccato: i tasti rossi spariscono, ricompaiono dopo il tocco che blocca il loop.
+  const hideRec = mode === "loop" && recording && !loopLocked;
 
   return (
     <main ref={shellRef} className="cam-shell">
@@ -856,7 +858,7 @@ export function ActionCam() {
               {clips[0] && (clips[0].kind === "photo" ? <img src={clips[0].url} className="h-full w-full object-cover" alt="" /> : <video src={clips[0].url} muted playsInline className="h-full w-full object-cover" />)}
             </button>
 
-            <button onClick={shutter} aria-label="Scatta" className="group relative h-[76px] w-[76px] rounded-full border-[4px] border-white outline-none [-webkit-tap-highlight-color:transparent]">
+            <button onClick={shutter} aria-label="Scatta" className={`group relative h-[76px] w-[76px] rounded-full border-[4px] border-white outline-none transition-opacity duration-300 [-webkit-tap-highlight-color:transparent] ${hideRec ? "opacity-0" : "opacity-100"}`}>
               {/* Cerchio (pronto a scattare) e quadrato (in registrazione) sono due elementi che si scambiano con scala + opacità: niente animazione degli angoli, quindi niente residui grafici su Safari. */}
               <span
                 className={`absolute inset-0 m-auto block h-[60px] w-[60px] rounded-full transition-[scale,opacity] duration-200 ease-out group-active:scale-[0.86] ${isVideoMode ? "bg-ios-red" : "bg-white"} ${recording ? "scale-50 opacity-0" : "opacity-100"}`}
@@ -867,7 +869,7 @@ export function ActionCam() {
             </button>
 
             {recording && mode === "loop" ? (
-              <button onClick={stopRec} aria-label="Stop" className="rot cam-btn h-[48px] w-[48px] bg-ios-red">
+              <button onClick={stopRec} aria-label="Stop" className={`rot cam-btn h-[48px] w-[48px] bg-ios-red transition-opacity duration-300 ${hideRec ? "opacity-0" : "opacity-100"}`}>
                 <Square size={18} fill="white" strokeWidth={0} />
               </button>
             ) : recording && mode === "video" ? (
