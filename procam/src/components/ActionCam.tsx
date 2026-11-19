@@ -736,7 +736,7 @@ export function ActionCam() {
               )}
             </div>
           ) : (
-            <div className="absolute inset-x-0 flex justify-center" style={{ bottom: `calc(var(--sa-bottom) + ${CONTROLS_H + 10}px)` }}>
+            <div className={`absolute inset-x-0 flex justify-center transition-opacity duration-300 ${hideRec ? "opacity-0" : "opacity-100"}`} style={{ bottom: `calc(var(--sa-bottom) + ${CONTROLS_H + 10}px)` }}>
               <div
                 className={`glass flex touch-none items-center gap-1 rounded-full p-[3px] transition-opacity ${dialOn ? "opacity-0" : ""}`}
                 onPointerDown={pillsDown}
@@ -764,7 +764,7 @@ export function ActionCam() {
         </div>
 
         <div className="pointer-events-none absolute inset-x-0 top-0 h-[120px] bg-gradient-to-b from-black/40 to-transparent" />
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[300px] bg-gradient-to-t from-black/55 to-transparent" />
+        <div className={`pointer-events-none absolute inset-x-0 bottom-0 h-[300px] bg-gradient-to-t from-black/55 to-transparent transition-opacity duration-300 ${hideRec ? "opacity-0" : "opacity-100"}`} />
 
         {error && (
           <div className="glass-strong fade-in absolute inset-x-4 z-30 rounded-2xl p-3 text-center text-[14px]" style={{ top: `calc(var(--sa-top) + ${TOP_BAR + 8}px)` }}>
@@ -775,7 +775,7 @@ export function ActionCam() {
         <div className="pointer-events-none absolute" style={{ inset: "var(--sa-top) var(--sa-right) var(--sa-bottom) var(--sa-left)" }}>
           {/* Barra in alto */}
           <header className="pointer-events-auto absolute inset-x-0 top-0 grid h-[44px] grid-cols-[1fr_auto_1fr] items-center px-5">
-            <div className="flex">
+            <div className={`flex transition-opacity duration-300 ${hideRec ? "opacity-0" : "opacity-100"}`}>
               <button
                 onClick={() => setTorch(!torch)}
                 aria-label="Torcia"
@@ -793,7 +793,7 @@ export function ActionCam() {
                 </button>
               )}
             </div>
-            <div className="flex items-center justify-end gap-3 text-[15px] font-semibold drop-shadow">
+            <div className={`flex items-center justify-end gap-3 text-[15px] font-semibold drop-shadow transition-opacity duration-300 ${hideRec ? "opacity-0" : "opacity-100"}`}>
               {isVideoMode ? (
                 <>
                   <button
@@ -822,7 +822,7 @@ export function ActionCam() {
             </div>
           </header>
 
-          {mode === "loop" && recording && (
+          {mode === "loop" && recording && !hideRec && (
             <div className="rot glass absolute left-1/2 top-[48px] -translate-x-1/2 whitespace-nowrap rounded-full px-3 py-1 text-[12px] font-medium tnum">
               {loopLocked ? "Loop bloccato · registrazione" : `Loop ${fmt(Math.min(loopBuf, loopMin * 60))} / ${fmt(loopMin * 60)} · tocca ovunque per bloccare`}
             </div>
@@ -831,7 +831,7 @@ export function ActionCam() {
           {/* Selettore dei modi */}
           <div
             ref={pickerRef}
-            className="pointer-events-auto absolute inset-x-0 overflow-hidden"
+            className={`pointer-events-auto absolute inset-x-0 overflow-hidden transition-opacity duration-300 ${hideRec ? "opacity-0" : "opacity-100"}`}
             style={{ bottom: SHUTTER_BOTTOM + 76 + 12, height: 32, touchAction: "none" }}
             onPointerDown={onGestureDown}
             onPointerUp={(e) => onGestureUp(e)}
@@ -853,7 +853,7 @@ export function ActionCam() {
           </div>
 
           {/* Anteprima ultimo scatto · otturatore · cambia camera */}
-          <footer className="pointer-events-auto absolute inset-x-0 flex items-center justify-between px-8" style={{ bottom: SHUTTER_BOTTOM, height: 76 }}>
+          <footer className={`pointer-events-auto absolute inset-x-0 flex items-center justify-between px-8 transition-opacity duration-300 ${hideRec ? "opacity-0" : "opacity-100"}`} style={{ bottom: SHUTTER_BOTTOM, height: 76 }}>
             <button onClick={() => setPanel("gallery")} aria-label="Libreria" className="rot h-[48px] w-[48px] overflow-hidden rounded-[10px] bg-ios-sheet">
               {clips[0] && (clips[0].kind === "photo" ? <img src={clips[0].url} className="h-full w-full object-cover" alt="" /> : <video src={clips[0].url} muted playsInline className="h-full w-full object-cover" />)}
             </button>
